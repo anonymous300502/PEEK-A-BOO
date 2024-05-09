@@ -12,3 +12,4 @@ Run `flask run -h <your url>` to start the server and you will start seeing user
 Open the flask server and you will be prompted for a key in which you will insert the username of the pc you want to connect to.
 
 The live screen will start displaying in your browser 
+<br><img src = "peekaboo.png" width = "500"><br>
